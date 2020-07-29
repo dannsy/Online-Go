@@ -33,7 +33,7 @@ class GoGui:
         self.bot_pad = (self.width - self.board_width) // 2
         self.top_pad = self.height - self.board_width - self.bot_pad * 2
         self.hor_pad = self.bot_pad
-        self.buffer = self.hor_pad // 3
+        self.buffer = self.spacing // 2
         self.stone_width = self.spacing // 2 - 1
 
         self.board = np.zeros((self.size, self.size), dtype=int)
@@ -451,28 +451,29 @@ class GoGui:
         font = pygame.font.SysFont("timesnewroman", 30)
 
         hori_padding = self.board_width + self.spacing
+        stone_width = 16
 
         # how many black stones have been captured
         text = font.render(str(self.black_captured), True, BLACK)
         gfxdraw.aacircle(
             self.display,
             hori_padding,
-            self.top_pad - self.stone_width * 3 - 10,
-            self.stone_width,
+            self.top_pad - stone_width * 3 - 10,
+            stone_width,
             BLACK,
         )
         gfxdraw.filled_circle(
             self.display,
             hori_padding,
-            self.top_pad - self.stone_width * 3 - 10,
-            self.stone_width,
+            self.top_pad - stone_width * 3 - 10,
+            stone_width,
             BLACK,
         )
         self.display.blit(
             text,
             (
-                hori_padding + self.stone_width * 2,
-                self.top_pad - self.stone_width * 3 - text.get_height() // 2 - 10,
+                hori_padding + stone_width * 2,
+                self.top_pad - stone_width * 3 - text.get_height() // 2 - 10,
             ),
         )
         # how many white stones have been captured
@@ -480,22 +481,22 @@ class GoGui:
         gfxdraw.aacircle(
             self.display,
             hori_padding,
-            self.top_pad - self.stone_width - 5,
-            self.stone_width,
+            self.top_pad - stone_width - 5,
+            stone_width,
             WHITE,
         )
         gfxdraw.filled_circle(
             self.display,
             hori_padding,
-            self.top_pad - self.stone_width - 5,
-            self.stone_width,
+            self.top_pad - stone_width - 5,
+            stone_width,
             WHITE,
         )
         self.display.blit(
             text,
             (
-                hori_padding + self.stone_width * 2,
-                self.top_pad - self.stone_width - text.get_height() // 2 - 5,
+                hori_padding + stone_width * 2,
+                self.top_pad - stone_width - text.get_height() // 2 - 5,
             ),
         )
 
@@ -570,6 +571,55 @@ class GoGui:
         # drawing stones captured
         self.draw_captured()
 
+    def scan_peripheral(self, row, col):
+        """Scan peripheral of specified stone
+
+        Args:
+            row (int): row of the stone
+            col (col): column of the stone
+
+        Returns:
+            int: 1 for Black, -1 for White, 0 for tie
+        """
+        black_score = 0
+        white_score = 0
+        for i in range(-2, 3):
+            temp_row = row + i
+            if temp_row >= 0 and temp_row < self.size:
+                for j in range(-2, 3):
+                    temp_col = col + j
+                    if temp_col >= 0 and temp_col < self.size:
+                        if self.board[temp_row, temp_col] == 1:
+                            black_score += 1
+                        elif self.board[temp_row, temp_col] == -1:
+                            white_score += 1
+
+        if black_score > white_score:
+            return 1
+        elif white_score > black_score:
+            return -1
+        else:
+            return 0
+
+    def score(self):
+        """Score the game
+        """
+        black_score = self.white_captured
+        white_score = self.black_captured
+        for row in range(self.size):
+            for col in range(self.size):
+                if self.scan_peripheral(row, col) == 1:
+                    black_score += 1
+                elif self.scan_peripheral(row, col) == -1:
+                    white_score += 1
+
+        if black_score > white_score:
+            print("BLACK WON")
+        elif white_score > black_score:
+            print("WHITE WON")
+        else:
+            print("TIE")
+
     def start_game(self):
         """Start game of Go
         """
@@ -588,6 +638,7 @@ class GoGui:
                 # enable closing of display
                 if event.type == pygame.QUIT:
                     self.running = False
+                    self.score()
                     return
                 # getting position of mouse
                 if event.type == pygame.MOUSEBUTTONDOWN:
