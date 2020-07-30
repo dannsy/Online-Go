@@ -2,6 +2,7 @@
 GoGui objects contain a representation of the
 Chinese strategy board game Go.
 """
+import os
 import string
 from collections import deque, namedtuple
 
@@ -24,7 +25,7 @@ class GoGui:
     """Class representing the GUI of a Go board
     """
 
-    def __init__(self, size):
+    def __init__(self, size, mode):
         self.size = size
         self.board_width = BOARD_WIDTH
         self.width = WIDTH
@@ -35,6 +36,8 @@ class GoGui:
         self.hor_pad = self.bot_pad
         self.buffer = self.spacing // 2
         self.stone_width = self.spacing // 2 - 1
+        self.black_stone_img = None
+        self.white_stone_img = None
 
         self.board = np.zeros((self.size, self.size), dtype=int)
         # keeps track of the parent of each group
@@ -44,6 +47,8 @@ class GoGui:
         self.newest_stone = None
         self.states = deque()
 
+        # what mode of game, 0 for playing solo, 1 for online, 2 for AI
+        self.mode = mode
         self.running = False
         self.display = None
         self.clock = None
@@ -307,7 +312,8 @@ class GoGui:
                     ) = self.states.pop()
                 else:
                     # did not violate Ko, move on
-                    self.color = not self.color
+                    if self.mode != 1:
+                        self.color = not self.color
 
     def update_stones(self):
         """Update the stones on GUI
@@ -529,15 +535,7 @@ class GoGui:
         """Update Go board GUI
         """
         self.display.fill(GREY, pygame.Rect(0, 0, self.width, self.top_pad))
-        self.display.fill(
-            YELLOW,
-            pygame.Rect(
-                self.hor_pad - self.buffer,
-                self.top_pad + self.bot_pad - self.buffer,
-                self.board_width + self.buffer * 2,
-                self.board_width + self.buffer * 2,
-            ),
-        )
+        self.display.fill(YELLOW, pygame.Rect(0, self.top_pad, self.width, self.width))
 
         # drawing grid
         self.draw_lines()
@@ -547,6 +545,9 @@ class GoGui:
 
         # drawing stones
         self.update_stones()
+
+        # drawing nums on the sides of board
+        self.draw_nums()
 
         # timer
         font = pygame.font.SysFont("timesnewroman", 30)
@@ -570,6 +571,13 @@ class GoGui:
 
         # drawing stones captured
         self.draw_captured()
+
+        mouse_x = pygame.mouse.get_pos()[0] - self.stone_width
+        mouse_y = pygame.mouse.get_pos()[1] - self.stone_width
+        if self.color:
+            self.display.blit(self.black_stone_img, (mouse_x, mouse_y))
+        else:
+            self.display.blit(self.white_stone_img, (mouse_x, mouse_y))
 
     def scan_peripheral(self, row, col):
         """Scan peripheral of specified stone
@@ -625,8 +633,15 @@ class GoGui:
         """
         self.running = True
         self.display = pygame.display.set_mode((self.width, self.height))
+        self.black_stone_img = pygame.image.load(
+            os.path.join(os.getcwd(), "img", "black_stone.png")
+        ).convert_alpha()
+        self.white_stone_img = pygame.image.load(
+            os.path.join(os.getcwd(), "img", "white_stone.png")
+        ).convert_alpha()
         self.gui_init()
         self.clock = pygame.time.Clock()
+        pygame.mouse.set_visible(False)
         pygame.display.set_caption("GO")
         start_time = pygame.time.get_ticks()
 
@@ -667,6 +682,6 @@ class GoGui:
 
 if __name__ == "__main__":
     pygame.init()
-    go_gui = GoGui(19)
+    go_gui = GoGui(19, 0)
     go_gui.start_game()
     pygame.quit()
