@@ -25,7 +25,7 @@ class GoGui:
     """Class representing the GUI of a Go board
     """
 
-    def __init__(self, size, mode):
+    def __init__(self, size):
         self.size = size
         self.board_width = BOARD_WIDTH
         self.width = WIDTH
@@ -47,8 +47,6 @@ class GoGui:
         self.newest_stone = None
         self.states = deque()
 
-        # what mode of game, 0 for playing solo, 1 for online, 2 for AI
-        self.mode = mode
         self.running = False
         self.display = None
         self.clock = None
@@ -312,8 +310,7 @@ class GoGui:
                     ) = self.states.pop()
                 else:
                     # did not violate Ko, move on
-                    if self.mode != 1:
-                        self.color = not self.color
+                    self.color = not self.color
 
     def update_stones(self):
         """Update the stones on GUI
@@ -506,6 +503,14 @@ class GoGui:
             ),
         )
 
+    def draw_turn(self):
+        """Drawing which player's turn it is
+        """
+        font = pygame.font.SysFont("timesnewroman", 30)
+        color = "BLACK TURN" if self.color else "WHITE TURN"
+        text = font.render(color, True, BLACK)
+        self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
+
     def gui_init(self):
         """Initialize Go board GUI
         """
@@ -565,9 +570,7 @@ class GoGui:
         # self.display.blit(fps_text, (470, 15))
 
         # whose turn it is
-        color = "BLACK" if self.color else "WHITE"
-        text = font.render(color, True, BLACK)
-        self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
+        self.draw_turn()
 
         # drawing stones captured
         self.draw_captured()
@@ -639,8 +642,8 @@ class GoGui:
         self.white_stone_img = pygame.image.load(
             os.path.join(os.getcwd(), "img", "white_stone.png")
         ).convert_alpha()
-        self.gui_init()
         self.clock = pygame.time.Clock()
+        self.gui_init()
         pygame.mouse.set_visible(False)
         pygame.display.set_caption("GO")
         start_time = pygame.time.get_ticks()
@@ -682,6 +685,6 @@ class GoGui:
 
 if __name__ == "__main__":
     pygame.init()
-    go_gui = GoGui(19, 0)
+    go_gui = GoGui(19)
     go_gui.start_game()
     pygame.quit()
