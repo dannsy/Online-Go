@@ -2,10 +2,11 @@ import pickle
 import socket
 import threading
 
-HOST = "10.10.40.27"
+HOST = socket.gethostbyname(socket.gethostname())
 PORT = 5000
 
 GAMES = {}
+GAMES_STARTED = {}
 
 
 def threaded_client(client, num, game_id):
@@ -18,8 +19,10 @@ def threaded_client(client, num, game_id):
         if num == 0:
             GAMES[game_id] = pickle.loads(client.recv(4096))
             print(f"Player {num} started game {game_id}")
+            GAMES_STARTED[game_id] = False
         else:
             print(f"Player {num} connected to game {game_id}")
+            GAMES_STARTED[game_id] = True
 
         while True:
             data = client.recv(4096).decode()
@@ -28,7 +31,10 @@ def threaded_client(client, num, game_id):
                 break
             else:
                 if data == "GET":
-                    client.sendall(pickle.dumps(GAMES[game_id]))
+                    if GAMES_STARTED[game_id]:
+                        client.sendall(pickle.dumps(GAMES[game_id]))
+                    else:
+                        client.sendall(pickle.dumps(False))
                 elif data == "POST":
                     GAMES[game_id] = pickle.loads(client.recv(4096))
                 else:

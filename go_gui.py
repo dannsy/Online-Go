@@ -414,10 +414,9 @@ class GoGui:
             )
 
     def draw_nums(self):
-        """Drawing the numbers on the sides of board
+        """Drawing the numbers on the side of the board
         """
         font = pygame.font.SysFont("calibri", 20)
-
         upper_case = string.ascii_uppercase
 
         for i in range(self.size):
@@ -448,11 +447,12 @@ class GoGui:
                 letter, (letter_x, self.height - self.bot_pad + self.buffer,),
             )
 
-    def draw_captured(self):
+    def draw_captured(self, font):
         """Drawing the captured stone counts
-        """
-        font = pygame.font.SysFont("timesnewroman", 30)
 
+        Args:
+            font (pygame font): font to use to draw
+        """
         hori_padding = self.board_width + self.spacing
         stone_width = 16
 
@@ -503,38 +503,15 @@ class GoGui:
             ),
         )
 
-    def draw_turn(self):
+    def draw_turn(self, font):
         """Drawing which player's turn it is
+
+        Args:
+            font (pygame font): font to use to draw
         """
-        font = pygame.font.SysFont("timesnewroman", 30)
         color = "BLACK TURN" if self.color else "WHITE TURN"
         text = font.render(color, True, BLACK)
         self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
-
-    def gui_init(self):
-        """Initialize Go board GUI
-        """
-        self.display.fill(GREY, pygame.Rect(0, 0, self.width, self.top_pad))
-        self.display.fill(YELLOW, pygame.Rect(0, self.top_pad, self.width, self.width))
-
-        # drawing grid
-        self.draw_lines()
-
-        # drawing dots
-        self.draw_dots()
-
-        # drawing nums on the sides of board
-        self.draw_nums()
-
-        # timer
-        font = pygame.font.SysFont("timesnewroman", 30)
-        # indicate the time elapsed since the game has started
-        text = font.render(
-            f"{(self.time_elapsed // 60):02}:{(self.time_elapsed % 60):02}",
-            True,
-            BLACK,
-        )
-        self.display.blit(text, (self.width - text.get_width() - 40, 15))
 
     def update_gui(self):
         """Update Go board GUI
@@ -548,14 +525,13 @@ class GoGui:
         # drawing dots
         self.draw_dots()
 
+        font = pygame.font.SysFont("timesnewroman", 30)
         # drawing stones
         self.update_stones()
 
         # drawing nums on the sides of board
         self.draw_nums()
 
-        # timer
-        font = pygame.font.SysFont("timesnewroman", 30)
         # indicate the time elapsed since the game has started
         text = font.render(
             f"{(self.time_elapsed // 60):02}:{(self.time_elapsed % 60):02}",
@@ -570,10 +546,10 @@ class GoGui:
         # self.display.blit(fps_text, (470, 15))
 
         # whose turn it is
-        self.draw_turn()
+        self.draw_turn(font)
 
         # drawing stones captured
-        self.draw_captured()
+        self.draw_captured(font)
 
         mouse_x = pygame.mouse.get_pos()[0] - self.stone_width
         mouse_y = pygame.mouse.get_pos()[1] - self.stone_width
@@ -643,7 +619,6 @@ class GoGui:
             os.path.join(os.getcwd(), "img", "white_stone.png")
         ).convert_alpha()
         self.clock = pygame.time.Clock()
-        self.gui_init()
         pygame.mouse.set_visible(False)
         pygame.display.set_caption("GO")
         start_time = pygame.time.get_ticks()
