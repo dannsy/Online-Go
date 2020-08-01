@@ -19,6 +19,7 @@ WHITE = Color(255, 255, 255)
 YELLOW = Color(220, 179, 92)
 BLACK = Color(0, 0, 0)
 GREY = Color(150, 150, 150)
+BLUE = Color(160, 180, 220)
 
 
 class GoGui:
@@ -38,6 +39,11 @@ class GoGui:
         self.stone_width = self.spacing // 2 - 1
         self.black_stone_img = None
         self.white_stone_img = None
+
+        self.but0_x = 15
+        self.but0_y = 15
+        self.but_width = 70
+        self.but_height = 35
 
         self.board = np.zeros((self.size, self.size), dtype=int)
         # keeps track of the parent of each group
@@ -298,7 +304,9 @@ class GoGui:
                 self.check_board()
 
                 # checking for Ko, prevent illegal move
-                if len(self.states) >= 2 and self.check_ko():
+                if (len(self.states) >= 2 and self.check_ko()) or self.board[
+                    row, col
+                ] == 0:
                     # violated Ko, move prevented
                     (
                         self.board,
@@ -311,6 +319,13 @@ class GoGui:
                 else:
                     # did not violate Ko, move on
                     self.color = not self.color
+        if (
+            pos[0] > self.but0_x
+            and pos[0] < self.but0_x + self.but_width
+            and pos[1] > self.but0_y
+            and pos[1] < self.but0_y + self.but_height
+        ):
+            self.color = not self.color
 
     def update_stones(self):
         """Update the stones on GUI
@@ -513,6 +528,21 @@ class GoGui:
         text = font.render(color, True, BLACK)
         self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
 
+    def draw_pass(self):
+        self.display.fill(
+            BLUE, pygame.Rect(self.but0_x, self.but0_y, self.but_width, self.but_height)
+        )
+
+        font = pygame.font.SysFont("timesnewroman", 22)
+        text = font.render("PASS", True, BLACK)
+        self.display.blit(
+            text,
+            (
+                15 + (self.but_width - text.get_width()) // 2,
+                15 + (self.but_height - text.get_height()) // 2,
+            ),
+        )
+
     def update_gui(self):
         """Update Go board GUI
         """
@@ -550,6 +580,9 @@ class GoGui:
 
         # drawing stones captured
         self.draw_captured(font)
+
+        # drawing pass button
+        self.draw_pass()
 
         mouse_x = pygame.mouse.get_pos()[0] - self.stone_width
         mouse_y = pygame.mouse.get_pos()[1] - self.stone_width

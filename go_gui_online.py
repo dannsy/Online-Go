@@ -4,7 +4,6 @@ Chinese strategy board game Go and is played online.
 """
 import pickle
 import os
-import time
 from collections import namedtuple
 
 import pygame
@@ -17,10 +16,16 @@ GREY = Color(150, 150, 150)
 
 
 class GoGuiOnline(GoGui):
-    def __init__(self, size, player):
+    """Class representing GUI for Go online
+
+    Args:
+        GoGui: Base class for GUI of Go
+    """
+
+    def __init__(self, conn, size, player):
         super().__init__(size)
         self.player = player
-        self.conn = None
+        self.conn = conn
         self.color = self.player == 0
         if self.color:
             self.my_color = "BLACK"
@@ -77,7 +82,9 @@ class GoGuiOnline(GoGui):
                 self.check_board()
 
                 # checking for Ko, prevent illegal move
-                if len(self.states) >= 2 and self.check_ko():
+                if (len(self.states) >= 2 and self.check_ko()) or self.board[
+                    row, col
+                ] == 0:
                     # violated Ko, move prevented
                     (
                         self.board,
@@ -88,7 +95,6 @@ class GoGuiOnline(GoGui):
                         self.black_captured,
                     ) = self.states.pop()
                 else:
-                    self.my_turn = False
                     state = (
                         self.board.copy(),
                         self.pointer.copy(),
@@ -97,16 +103,47 @@ class GoGuiOnline(GoGui):
                         self.white_captured,
                         self.black_captured,
                     )
-                    self.conn.sendall(str.encode("POST"))
-                    self.conn.sendall(pickle.dumps(state))
                     self.states.append(state)
 
+                    state = list(state)
+                    state.insert(0, self.op_color)
+                    state = tuple(state)
+                    self.my_turn = False
+                    self.conn.sendall(str.encode("POST"))
+                    self.conn.sendall(pickle.dumps(state))
+
+        if (
+            pos[0] > self.but0_x
+            and pos[0] < self.but0_x + self.but_width
+            and pos[1] > self.but0_y
+            and pos[1] < self.but0_y + self.but_height
+        ):
+            self.my_turn = False
+            state = (
+                self.op_color,
+                self.board.copy(),
+                self.pointer.copy(),
+                self.white_group.copy(),
+                self.black_group.copy(),
+                self.white_captured,
+                self.black_captured,
+            )
+            self.conn.sendall(str.encode("POST"))
+            self.conn.sendall(pickle.dumps(state))
+
     def draw_turn(self, font):
+        """Drawing which player's turn it is
+
+        Args:
+            font (pygame font): font to use to draw
+        """
         color = f"{self.my_color} TURN" if self.my_turn else f"{self.op_color} TURN"
         text = font.render(color, True, BLACK)
         self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
 
     def wait_gui(self):
+        """GUI for waiting for opponent to connect
+        """
         self.display.fill(GREY)
 
         font = pygame.font.SysFont("timesnewroman", 35)
@@ -119,11 +156,10 @@ class GoGuiOnline(GoGui):
             ),
         )
 
-    def start_game(self, conn):
+    def start_game(self):
         """Start game of Go
         """
         self.running = True
-        self.conn = conn
         self.display = pygame.display.set_mode((self.width, self.height))
         self.black_stone_img = pygame.image.load(
             os.path.join(os.getcwd(), "img", "black_stone.png")
@@ -134,11 +170,11 @@ class GoGuiOnline(GoGui):
         self.clock = pygame.time.Clock()
         self.wait_gui()
         pygame.display.set_caption("GO online")
-        start_time = pygame.time.get_ticks()
 
         if self.player == 0:
             self.my_turn = True
             state = (
+                "BLACK",
                 self.board,
                 self.pointer,
                 self.white_group,
@@ -147,47 +183,61 @@ class GoGuiOnline(GoGui):
                 self.black_captured,
             )
             self.conn.sendall(pickle.dumps(state))
+        else:
+            self.started = True
 
         # main loop of Go
-        while self.running:
-            self.time_elapsed = int((pygame.time.get_ticks() - start_time) / 1000)
-
+        while not self.started:
             self.conn.sendall(str.encode("GET"))
             response = pickle.loads(self.conn.recv(4096))
 
-            if not self.started and response:
+            if response:
                 self.started = True
-                pygame.mouse.set_visible(False)
-                start_time = pygame.time.get_ticks()
-                self.current_gui = self.update_gui
-            if self.started:
-                if (self.board != response[0]).any():
-                    self.my_turn = True
-                    (
-                        self.board,
-                        self.pointer,
-                        self.white_group,
-                        self.black_group,
-                        self.white_captured,
-                        self.black_captured,
-                    ) = response
+
+            for event in pygame.event.get():
+                # enable closing of display
+                if event.type == pygame.QUIT:
+                    self.started = True
+                    self.running = False
+                    break
+
+            self.wait_gui()
+
+            self.clock.tick(60)
+            pygame.display.update()
+
+        start_time = pygame.time.get_ticks()
+        pygame.mouse.set_visible(False)
+        # add loop for main game
+        while self.running:
+            self.time_elapsed = int((pygame.time.get_ticks() - start_time) / 1000)
+            self.conn.sendall(str.encode("GET"))
+            response = pickle.loads(self.conn.recv(8192))
+
+            if response[0] == self.my_color:
+                self.my_turn = True
+                (
+                    _,
+                    self.board,
+                    self.pointer,
+                    self.white_group,
+                    self.black_group,
+                    self.white_captured,
+                    self.black_captured,
+                ) = response
 
             for event in pygame.event.get():
                 # enable closing of display
                 if event.type == pygame.QUIT:
                     self.running = False
                     self.score()
-                    return
+                    break
                 # getting position of mouse
-                if (
-                    self.started
-                    and event.type == pygame.MOUSEBUTTONDOWN
-                    and self.my_turn
-                ):
+                if event.type == pygame.MOUSEBUTTONDOWN and self.my_turn:
                     mouse_pos = pygame.mouse.get_pos()
                     self.fill_stone(mouse_pos)
 
-            self.current_gui()
+            self.update_gui()
 
             self.clock.tick(60)
             pygame.display.update()

@@ -1,3 +1,5 @@
+"""Server for Go online
+"""
 import pickle
 import socket
 import threading
@@ -9,43 +11,55 @@ GAMES = {}
 GAMES_STARTED = {}
 
 
-def threaded_client(client, num, game_id):
-    with client:
-        # sending player number
-        client.send(str.encode(str(num)))
-        # sending game id
-        client.send(str.encode(str(game_id)))
+def threaded_client(serve, num, game_id):
+    """For each player connected, manage which game the player
+    plays, and determine whether game has started. Also facilitate
+    the communication of game state between players
 
-        if num == 0:
-            GAMES[game_id] = pickle.loads(client.recv(4096))
-            print(f"Player {num} started game {game_id}")
-            GAMES_STARTED[game_id] = False
-        else:
-            print(f"Player {num} connected to game {game_id}")
-            GAMES_STARTED[game_id] = True
+    Args:
+        serve (client connection): the connection to the client/player
+        num (int): the player number (0 and 1)
+        game_id (int): the game number
+    """
+    connected = True
+    try:
+        with serve:
+            # sending player number
+            serve.send(str.encode(str(num)))
+            # sending game id
+            serve.send(str.encode(str(game_id)))
 
-        while True:
-            data = client.recv(4096).decode()
-
-            if not data:
-                break
+            if num == 0:
+                GAMES[game_id] = pickle.loads(serve.recv(4096))
+                print(f"Player {num} started game {game_id}")
+                GAMES_STARTED[game_id] = False
             else:
-                if data == "GET":
-                    if GAMES_STARTED[game_id]:
-                        client.sendall(pickle.dumps(GAMES[game_id]))
-                    else:
-                        client.sendall(pickle.dumps(False))
-                elif data == "POST":
-                    GAMES[game_id] = pickle.loads(client.recv(4096))
+                print(f"Player {num} connected to game {game_id}")
+                if game_id in GAMES_STARTED:
+                    GAMES_STARTED[game_id] = True
                 else:
-                    break
+                    connected = False
 
-    print(f"Player {num} lost connection")
-    # try:
-    #     del GAMES[game_id]
-    #     print("Closing game", game_id)
-    # except:
-    #     pass
+            while connected:
+                data = serve.recv(4096).decode()
+
+                if not data:
+                    connected = False
+                else:
+                    if data == "GET":
+                        if GAMES_STARTED[game_id]:
+                            serve.sendall(pickle.dumps(GAMES[game_id]))
+                        else:
+                            serve.sendall(pickle.dumps(False))
+                    elif data == "POST":
+                        GAMES[game_id] = pickle.loads(serve.recv(4096))
+                    else:
+                        connected = False
+
+        print(f"Player {num} lost connection")
+        del GAMES_STARTED[game_id]
+    except KeyError:
+        print(f"Player {num} lost connection")
 
 
 def main():
@@ -54,13 +68,14 @@ def main():
     # counts how many players have connected to server
     id_count = 0
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind((HOST, PORT))
+        server.listen()
         print("Server started, listening for connections")
 
+        #### close server after 5 minutes of inactivity
         while True:
-            conn, addr = s.accept()
+            conn, addr = server.accept()
             print(f"Connected to: {addr}")
 
             # every two player means one game
