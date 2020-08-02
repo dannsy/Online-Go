@@ -95,6 +95,7 @@ class GoGuiOnline(GoGui):
                         self.black_captured,
                     ) = self.states.pop()
                 else:
+                    # did not violate Ko, move on
                     state = (
                         self.board.copy(),
                         self.pointer.copy(),
@@ -108,6 +109,7 @@ class GoGuiOnline(GoGui):
                     state = list(state)
                     state.insert(0, self.op_color)
                     state = tuple(state)
+                    # send the new state of game
                     self.my_turn = False
                     self.conn.sendall(str.encode("POST"))
                     self.conn.sendall(pickle.dumps(state))
@@ -119,6 +121,7 @@ class GoGuiOnline(GoGui):
             and pos[1] < self.but0_y + self.but_height
         ):
             self.my_turn = False
+            # passing the turn
             state = (
                 self.op_color,
                 self.board.copy(),
@@ -172,6 +175,7 @@ class GoGuiOnline(GoGui):
         pygame.display.set_caption("GO online")
 
         if self.player == 0:
+            # if player 0, then send relevant game information to server
             self.my_turn = True
             state = (
                 "BLACK",
@@ -184,10 +188,11 @@ class GoGuiOnline(GoGui):
             )
             self.conn.sendall(pickle.dumps(state))
         else:
+            # if player 1, then start the game
             self.started = True
 
-        # main loop of Go
         while not self.started:
+            # wait until player 1 (opponent) has connected
             self.conn.sendall(str.encode("GET"))
             response = pickle.loads(self.conn.recv(4096))
 
@@ -208,13 +213,14 @@ class GoGuiOnline(GoGui):
 
         start_time = pygame.time.get_ticks()
         pygame.mouse.set_visible(False)
-        # add loop for main game
+        # loop for main game
         while self.running:
             self.time_elapsed = int((pygame.time.get_ticks() - start_time) / 1000)
             self.conn.sendall(str.encode("GET"))
             response = pickle.loads(self.conn.recv(8192))
 
             if response[0] == self.my_color:
+                # receiving game after opponent has moved
                 self.my_turn = True
                 (
                     _,

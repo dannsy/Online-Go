@@ -21,6 +21,8 @@ BLACK = Color(0, 0, 0)
 GREY = Color(150, 150, 150)
 BLUE = Color(160, 180, 220)
 
+#### TODO implement algorithm to check for which player an intersection belongs to
+
 
 class GoGui:
     """Class representing the GUI of a Go board

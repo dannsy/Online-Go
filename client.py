@@ -18,11 +18,13 @@ def main():
         addr = (HOST, PORT)
         client.connect(addr)
 
+        # receiving meta game information
         player_num = int(client.recv(1024).decode("utf-8"))
         print(f"You are player {player_num}")
         game_id = int(client.recv(1024).decode("utf-8"))
         print(f"Game id {game_id}")
 
+        # starting game on client side
         go_game = GoGuiOnline(client, 19, player_num)
         go_game.start_game()
 
