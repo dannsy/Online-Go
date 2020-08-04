@@ -28,24 +28,26 @@ class GoGui:
     """Class representing the GUI of a Go board
     """
 
+    board_width = BOARD_WIDTH
+    width = WIDTH
+    height = HEIGHT
+
+    bot_pad = (width - board_width) // 2
+    top_pad = height - board_width - bot_pad * 2
+    hor_pad = bot_pad
+
+    but0_x = 15
+    but0_y = 15
+    but_width = 70
+    but_height = 35
+
     def __init__(self, size):
         self.size = size
-        self.board_width = BOARD_WIDTH
-        self.width = WIDTH
-        self.height = HEIGHT
         self.spacing = self.board_width // (size - 1)
-        self.bot_pad = (self.width - self.board_width) // 2
-        self.top_pad = self.height - self.board_width - self.bot_pad * 2
-        self.hor_pad = self.bot_pad
         self.buffer = self.spacing // 2
         self.stone_width = self.spacing // 2 - 1
         self.black_stone_img = None
         self.white_stone_img = None
-
-        self.but0_x = 15
-        self.but0_y = 15
-        self.but_width = 70
-        self.but_height = 35
 
         self.board = np.zeros((self.size, self.size), dtype=int)
         # keeps track of the parent of each group
@@ -60,7 +62,6 @@ class GoGui:
         self.clock = None
         self.time_elapsed = 0
 
-        self.player = 0
         # True for black, False for white
         self.color = True
         self.white_captured = 0

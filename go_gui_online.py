@@ -35,7 +35,6 @@ class GoGuiOnline(GoGui):
             self.op_color = "BLACK"
         self.my_turn = False
         self.started = False
-        self.current_gui = self.wait_gui
 
     def fill_stone(self, pos):
         """Fill stone in position according to mouse click
