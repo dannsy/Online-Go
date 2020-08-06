@@ -21,8 +21,6 @@ BLACK = Color(0, 0, 0)
 GREY = Color(150, 150, 150)
 BLUE = Color(160, 180, 220)
 
-#### TODO implement algorithm to check for which player an intersection belongs to
-
 
 class GoGui:
     """Class representing the GUI of a Go board
@@ -46,19 +44,20 @@ class GoGui:
         self.spacing = self.board_width // (size - 1)
         self.buffer = self.spacing // 2
         self.stone_width = self.spacing // 2 - 1
-        self.black_stone_img = None
-        self.white_stone_img = None
 
         self.board = np.zeros((self.size, self.size), dtype=int)
         # keeps track of the parent of each group
-        self.pointer = np.zeros((self.size, self.size), dtype=tuple)
-        self.white_group = {}
-        self.black_group = {}
+        self.pointer = np.empty((self.size, self.size), dtype=int)
+        self.pointer.fill(-1)
+        self.white_groups = {}
+        self.black_groups = {}
         self.newest_stone = None
         self.states = deque()
 
         self.running = False
         self.display = None
+        self.black_stone_img = None
+        self.white_stone_img = None
         self.clock = None
         self.time_elapsed = 0
 
@@ -66,6 +65,11 @@ class GoGui:
         self.color = True
         self.white_captured = 0
         self.black_captured = 0
+        self.white_score = 0
+        self.black_score = 0
+        self.ended = False
+        self.empty_groups = {}
+        self.territory = None
 
     def check_liberty(self, row, col):
         """Checks the liberty of a stone
@@ -99,7 +103,7 @@ class GoGui:
         # checking white stones
         white_to_del = []
         check_again = None
-        for key, group in self.white_group.items():
+        for key, group in self.white_groups.items():
             for pos in group:
                 if pos == self.newest_stone:
                     # do not check newest placed stone yet
@@ -119,11 +123,11 @@ class GoGui:
 
         # remove group representation
         for to_del in white_to_del:
-            del self.white_group[to_del]
+            del self.white_groups[to_del]
 
         # checking black stones
         black_to_del = []
-        for key, group in self.black_group.items():
+        for key, group in self.black_groups.items():
             for pos in group:
                 if pos == self.newest_stone:
                     # do not check newest placed stone yet
@@ -143,34 +147,34 @@ class GoGui:
 
         # remove group representation
         for to_del in black_to_del:
-            del self.black_group[to_del]
+            del self.black_groups[to_del]
 
         if check_again is not None:
             # checking newest placed stone and removing it if necessary
             if self.color:
-                for pos in self.black_group[check_again]:
+                for pos in self.black_groups[check_again]:
                     if self.check_liberty(pos // self.size, pos % self.size):
                         break
                 else:
-                    for pos in self.black_group[check_again]:
+                    for pos in self.black_groups[check_again]:
                         self.black_captured += 1
                         row = pos // self.size
                         col = pos % self.size
                         self.board[row, col] = 0
                         self.pointer[row, col] = 0
-                    del self.black_group[check_again]
+                    del self.black_groups[check_again]
             else:
-                for pos in self.white_group[check_again]:
+                for pos in self.white_groups[check_again]:
                     if self.check_liberty(pos // self.size, pos % self.size):
                         break
                 else:
-                    for pos in self.white_group[check_again]:
+                    for pos in self.white_groups[check_again]:
                         self.white_captured += 1
                         row = pos // self.size
                         col = pos % self.size
                         self.board[row, col] = 0
                         self.pointer[row, col] = 0
-                    del self.white_group[check_again]
+                    del self.white_groups[check_again]
 
     def add_group(self, row, col, color_num):
         """Updating stones to form correct groups
@@ -180,7 +184,7 @@ class GoGui:
             col (int): column of the stone
             color_num (int): 1 for black, -1 for white
         """
-        group = self.black_group if color_num == 1 else self.white_group
+        group = self.black_groups if color_num == 1 else self.white_groups
         setted = False
 
         # checking whether stone above is of same color
@@ -254,13 +258,16 @@ class GoGui:
         Returns:
             bool: True if violated, False otherwise
         """
-        _ = self.states.pop()
-        board_2, pointer_2, white_2, black_2, w_cap_2, b_cap_2 = self.states.pop()
+        if len(self.states) > 2:
+            _ = self.states.pop()
+            board_2, pointer_2, white_2, black_2, w_cap_2, b_cap_2 = self.states.pop()
 
-        self.states.append((board_2, pointer_2, white_2, black_2, w_cap_2, b_cap_2))
-        self.states.append(_)
+            self.states.append((board_2, pointer_2, white_2, black_2, w_cap_2, b_cap_2))
+            self.states.append(_)
 
-        return (board_2 == self.board).all()
+            return (board_2 == self.board).all()
+        else:
+            return False
 
     def fill_stone(self, pos):
         """Fill stone in position according to mouse click
@@ -285,8 +292,8 @@ class GoGui:
                     (
                         self.board.copy(),
                         self.pointer.copy(),
-                        self.white_group.copy(),
-                        self.black_group.copy(),
+                        self.white_groups.copy(),
+                        self.black_groups.copy(),
                         self.white_captured,
                         self.black_captured,
                     )
@@ -307,15 +314,13 @@ class GoGui:
                 self.check_board()
 
                 # checking for Ko, prevent illegal move
-                if (len(self.states) >= 2 and self.check_ko()) or self.board[
-                    row, col
-                ] == 0:
+                if self.check_ko() or self.board[row, col] == 0:
                     # violated Ko, move prevented
                     (
                         self.board,
                         self.pointer,
-                        self.white_group,
-                        self.black_group,
+                        self.white_groups,
+                        self.black_groups,
                         self.white_captured,
                         self.black_captured,
                     ) = self.states.pop()
@@ -328,7 +333,23 @@ class GoGui:
             and pos[1] > self.but0_y
             and pos[1] < self.but0_y + self.but_height
         ):
-            self.color = not self.color
+            self.pass_turn()
+
+    def pass_turn(self):
+        """Pass turn to opponent
+        """
+        # save state of game
+        self.states.append(
+            (
+                self.board.copy(),
+                self.pointer.copy(),
+                self.white_groups.copy(),
+                self.black_groups.copy(),
+                self.white_captured,
+                self.black_captured,
+            )
+        )
+        self.color = not self.color
 
     def update_stones(self):
         """Update the stones on GUI
@@ -532,6 +553,8 @@ class GoGui:
         self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
 
     def draw_pass(self):
+        """Drawing the pass button
+        """
         self.display.fill(
             BLUE, pygame.Rect(self.but0_x, self.but0_y, self.but_width, self.but_height)
         )
@@ -545,6 +568,34 @@ class GoGui:
                 15 + (self.but_height - text.get_height()) // 2,
             ),
         )
+
+    def draw_territory(self):
+        """Drawing the territory of both colors
+        """
+        top_bot_padding = self.top_pad + self.bot_pad
+
+        for row in range(self.size):
+            for col in range(self.size):
+                if self.territory[row, col] == 1:
+                    self.display.fill(
+                        BLACK,
+                        pygame.Rect(
+                            self.hor_pad + col * self.spacing - 3,
+                            top_bot_padding + row * self.spacing - 3,
+                            6,
+                            6,
+                        ),
+                    )
+                elif self.territory[row, col] == -1:
+                    self.display.fill(
+                        WHITE,
+                        pygame.Rect(
+                            self.hor_pad + col * self.spacing - 3,
+                            top_bot_padding + row * self.spacing - 3,
+                            6,
+                            6,
+                        ),
+                    )
 
     def update_gui(self):
         """Update Go board GUI
@@ -587,58 +638,135 @@ class GoGui:
         # drawing pass button
         self.draw_pass()
 
+        if self.ended:
+            self.draw_territory()
+
         mouse_x = pygame.mouse.get_pos()[0] - self.stone_width
         mouse_y = pygame.mouse.get_pos()[1] - self.stone_width
-        if self.color:
-            self.display.blit(self.black_stone_img, (mouse_x, mouse_y))
-        else:
-            self.display.blit(self.white_stone_img, (mouse_x, mouse_y))
+        if pygame.mouse.get_focused():
+            if self.color:
+                self.display.blit(self.black_stone_img, (mouse_x, mouse_y))
+            else:
+                self.display.blit(self.white_stone_img, (mouse_x, mouse_y))
 
-    def scan_peripheral(self, row, col):
-        """Scan peripheral of specified stone
+    def check_zero_liberty(self, row, col):
+        """Checks the liberty of a stone
 
         Args:
             row (int): row of the stone
-            col (col): column of the stone
+            col (int): column of the stone
 
         Returns:
-            int: 1 for Black, -1 for White, 0 for tie
+            bool: True if stone has liberty, False otherwise
         """
-        black_score = 0
-        white_score = 0
-        for i in range(-2, 3):
-            temp_row = row + i
-            if temp_row >= 0 and temp_row < self.size:
-                for j in range(-2, 3):
-                    temp_col = col + j
-                    if temp_col >= 0 and temp_col < self.size:
-                        if self.board[temp_row, temp_col] == 1:
-                            black_score += 1
-                        elif self.board[temp_row, temp_col] == -1:
-                            white_score += 1
+        surrounded_by = set()
+        # checking row above
+        if row != 0 and self.board[row - 1, col] == 1:
+            surrounded_by.add(1)
+        elif row != 0 and self.board[row - 1, col] == -1:
+            surrounded_by.add(-1)
+        # checking row below
+        if row != self.size - 1 and self.board[row + 1, col] == 1:
+            surrounded_by.add(1)
+        elif row != self.size - 1 and self.board[row + 1, col] == -1:
+            surrounded_by.add(-1)
+        # checking col to the left
+        if col != 0 and self.board[row, col - 1] == 1:
+            surrounded_by.add(1)
+        elif col != 0 and self.board[row, col - 1] == -1:
+            surrounded_by.add(-1)
+        # checking col to the right
+        if col != self.size - 1 and self.board[row, col + 1] == 1:
+            surrounded_by.add(1)
+        elif col != self.size - 1 and self.board[row, col + 1] == -1:
+            surrounded_by.add(-1)
 
-        if black_score > white_score:
-            return 1
-        elif white_score > black_score:
-            return -1
-        else:
-            return 0
+        return surrounded_by
+
+    def check_territory(self):
+        """Checking whether each group of empty intersections is part of
+        a color's territory
+        """
+        for group in self.empty_groups.values():
+            surrounded_by = set()
+            for pos in group:
+                new = self.check_zero_liberty(pos // self.size, pos % self.size)
+                surrounded_by = surrounded_by.union(new)
+                if len(surrounded_by) >= 2:
+                    break
+            else:
+                try:
+                    color = surrounded_by.pop()
+                    for pos in group:
+                        self.territory[pos // self.size, pos % self.size] = color
+                    if color == 1:
+                        self.black_score += len(group)
+                    else:
+                        self.white_score += len(group)
+                except KeyError:
+                    pass
+
+    def group_empty(self, row, col):
+        """Group all empty intersections
+
+        Args:
+            row (int): row of target intersection
+            col (int): column of target intersection
+        """
+        group = self.empty_groups
+        setted = False
+
+        # checking whether stone above is of same color
+        if row != 0 and self.board[row - 1, col] == 0:
+            parent = self.pointer[row - 1, col]
+            self.pointer[row, col] = parent
+            # adding stone to group of above stone
+            group[parent] = group[parent].union({row * self.size + col})
+            setted = True
+
+        # checking whether left stone is of same color
+        if col != 0 and self.board[row, col - 1] == 0:
+            if setted:
+                # adding left group to group newest stone belongs to
+                prev_parent = self.pointer[row, col - 1]
+                if prev_parent != parent:
+                    for pos in group[prev_parent]:
+                        self.pointer[pos // self.size, pos % self.size] = parent
+                    group[parent] = group[parent].union(group[prev_parent])
+                    del group[prev_parent]
+            else:
+                parent = self.pointer[row, col - 1]
+                self.pointer[row, col] = parent
+                # adding stone to left group
+                group[parent] = group[parent].union({row * self.size + col})
+                setted = True
+
+        # create new group of stone if there are no adjacent same color stones
+        if not setted:
+            parent = row * self.size + col
+            self.pointer[row, col] = parent
+            group[parent] = {parent}
 
     def score(self):
         """Score the game
         """
-        black_score = self.white_captured
-        white_score = self.black_captured
+        self.empty_groups = {}
+        self.territory = np.zeros((self.size, self.size), dtype=int)
+
+        self.black_score = self.white_captured
+        self.white_score = self.black_captured
+
         for row in range(self.size):
             for col in range(self.size):
-                if self.scan_peripheral(row, col) == 1:
-                    black_score += 1
-                elif self.scan_peripheral(row, col) == -1:
-                    white_score += 1
+                if self.board[row, col] == 0:
+                    self.group_empty(row, col)
 
-        if black_score > white_score:
+        self.check_territory()
+
+        print(f"BLACK SCORE: {self.black_score}, WHITE SCORE: {self.white_score}")
+        if self.black_score > self.white_score:
             print("BLACK WON")
-        elif white_score > black_score:
+        elif self.white_score > self.black_score:
             print("WHITE WON")
         else:
             print("TIE")
@@ -671,23 +799,30 @@ class GoGui:
                     return
                 # getting position of mouse
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    self.ended = False
                     mouse_pos = pygame.mouse.get_pos()
                     self.fill_stone(mouse_pos)
                 if event.type == pygame.KEYDOWN:
                     keys = pygame.key.get_pressed()
+                    if keys[pygame.K_p]:
+                        self.pass_turn()
                     if keys[pygame.K_LCTRL] and keys[pygame.K_z]:
+                        self.ended = False
                         try:
                             (
                                 self.board,
                                 self.pointer,
-                                self.white_group,
-                                self.black_group,
+                                self.white_groups,
+                                self.black_groups,
                                 self.white_captured,
                                 self.black_captured,
                             ) = self.states.pop()
                             self.color = not self.color
                         except IndexError:
                             pass
+                    if keys[pygame.K_SPACE]:
+                        self.ended = True
+                        self.score()
 
             self.clock.tick(60)
             self.update_gui()
