@@ -7,8 +7,10 @@ import threading
 HOST = socket.gethostbyname(socket.gethostname())
 PORT = 5000
 
+# Contains actual informatino of each active game
 GAMES = {}
-GAMES_STARTED = {}
+# Contains meta-information of each active game
+GAMES_STATUS = {}
 
 
 def threaded_client(serve, num, game_id):
@@ -34,13 +36,13 @@ def threaded_client(serve, num, game_id):
                 GAMES[game_id] = pickle.loads(serve.recv(4096))
                 print(f"Player {num} started game {game_id}")
                 # since only player 0 has connected, do not start game yet
-                GAMES_STARTED[game_id] = False
+                GAMES_STATUS[game_id] = False
             else:
                 print(f"Player {num} connected to game {game_id}")
                 # if player 1, check whether player 0 has left game
-                if game_id in GAMES_STARTED:
+                if game_id in GAMES_STATUS:
                     # if player 0 present, start game
-                    GAMES_STARTED[game_id] = True
+                    GAMES_STATUS[game_id] = True
                 else:
                     connected = False
 
@@ -53,19 +55,21 @@ def threaded_client(serve, num, game_id):
                 else:
                     if data == "GET":
                         # sending information of the game
-                        if GAMES_STARTED[game_id]:
+                        if GAMES_STATUS[game_id]:
                             serve.sendall(pickle.dumps(GAMES[game_id]))
                         else:
                             serve.sendall(pickle.dumps(False))
                     elif data == "POST":
                         # receiving information of the game
-                        GAMES[game_id] = pickle.loads(serve.recv(4096))
+                        request_obj = pickle.loads(serve.recv(4096))
+                        GAMES[game_id] = request_obj
                     else:
                         connected = False
 
         # first player to leave deleting the game
         print(f"Player {num} lost connection")
-        del GAMES_STARTED[game_id]
+        del GAMES[game_id]
+        del GAMES_STATUS[game_id]
     except KeyError:
         # if cannot delete game, that means game already deleted
         print(f"Player {num} lost connection")

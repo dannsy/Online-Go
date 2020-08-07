@@ -2,8 +2,8 @@
 GoGuiOnline objects contain a representation of the
 Chinese strategy board game Go and is played online.
 """
-import pickle
 import os
+import pickle
 from collections import namedtuple
 
 import pygame
@@ -13,6 +13,7 @@ from go_gui import GoGui
 Color = namedtuple("Color", ["r", "g", "b"])
 BLACK = Color(0, 0, 0)
 GREY = Color(150, 150, 150)
+BLUE = Color(160, 180, 220)
 
 
 class GoGuiOnline(GoGui):
@@ -53,14 +54,13 @@ class GoGuiOnline(GoGui):
             col = round((pos[0] - self.hor_pad) / self.spacing)
             if self.board[row, col] == 0:
                 # if board position is unfilled
-
                 # save state of game
                 self.states.append(
                     (
                         self.board.copy(),
                         self.pointer.copy(),
-                        self.white_group.copy(),
-                        self.black_group.copy(),
+                        self.white_groups.copy(),
+                        self.black_groups.copy(),
                         self.white_captured,
                         self.black_captured,
                     )
@@ -81,25 +81,24 @@ class GoGuiOnline(GoGui):
                 self.check_board()
 
                 # checking for Ko, prevent illegal move
-                if (len(self.states) >= 2 and self.check_ko()) or self.board[
-                    row, col
-                ] == 0:
+                if self.check_ko() or self.board[row, col] == 0:
                     # violated Ko, move prevented
                     (
                         self.board,
                         self.pointer,
-                        self.white_group,
-                        self.black_group,
+                        self.white_groups,
+                        self.black_groups,
                         self.white_captured,
                         self.black_captured,
                     ) = self.states.pop()
                 else:
+                    pygame.mixer.music.play()
                     # did not violate Ko, move on
                     state = (
                         self.board.copy(),
                         self.pointer.copy(),
-                        self.white_group.copy(),
-                        self.black_group.copy(),
+                        self.white_groups.copy(),
+                        self.black_groups.copy(),
                         self.white_captured,
                         self.black_captured,
                     )
@@ -113,25 +112,37 @@ class GoGuiOnline(GoGui):
                     self.conn.sendall(str.encode("POST"))
                     self.conn.sendall(pickle.dumps(state))
 
-        if (
-            pos[0] > self.but0_x
-            and pos[0] < self.but0_x + self.but_width
+        elif (
+            pos[0] > self.but_x
+            and pos[0] < self.but_x + self.but_width
             and pos[1] > self.but0_y
             and pos[1] < self.but0_y + self.but_height
         ):
-            self.my_turn = False
-            # passing the turn
-            state = (
-                self.op_color,
-                self.board.copy(),
-                self.pointer.copy(),
-                self.white_group.copy(),
-                self.black_group.copy(),
-                self.white_captured,
-                self.black_captured,
-            )
-            self.conn.sendall(str.encode("POST"))
-            self.conn.sendall(pickle.dumps(state))
+            self.pass_turn()
+        elif (
+            pos[0] > self.but_x
+            and pos[0] < self.but_x + self.but_width
+            and pos[1] > self.but1_y
+            and pos[1] < self.but1_y + self.but_height
+        ):
+            print("NO CLEAR IN MULTIPLAYER")
+
+    def pass_turn(self):
+        """Pass turn to opponent
+        """
+        self.my_turn = False
+        # passing the turn
+        state = (
+            self.op_color,
+            self.board.copy(),
+            self.pointer.copy(),
+            self.white_groups.copy(),
+            self.black_groups.copy(),
+            self.white_captured,
+            self.black_captured,
+        )
+        self.conn.sendall(str.encode("POST"))
+        self.conn.sendall(pickle.dumps(state))
 
     def draw_turn(self, font):
         """Drawing which player's turn it is
@@ -164,10 +175,10 @@ class GoGuiOnline(GoGui):
         self.running = True
         self.display = pygame.display.set_mode((self.width, self.height))
         self.black_stone_img = pygame.image.load(
-            os.path.join(os.getcwd(), "img", "black_stone.png")
+            os.path.join(os.getcwd(), "assets", "img", "black_stone.png")
         ).convert_alpha()
         self.white_stone_img = pygame.image.load(
-            os.path.join(os.getcwd(), "img", "white_stone.png")
+            os.path.join(os.getcwd(), "assets", "img", "white_stone.png")
         ).convert_alpha()
         self.clock = pygame.time.Clock()
         self.wait_gui()
@@ -180,8 +191,8 @@ class GoGuiOnline(GoGui):
                 "BLACK",
                 self.board,
                 self.pointer,
-                self.white_group,
-                self.black_group,
+                self.white_groups,
+                self.black_groups,
                 self.white_captured,
                 self.black_captured,
             )
@@ -216,7 +227,7 @@ class GoGuiOnline(GoGui):
         while self.running:
             self.time_elapsed = int((pygame.time.get_ticks() - start_time) / 1000)
             self.conn.sendall(str.encode("GET"))
-            response = pickle.loads(self.conn.recv(8192))
+            response = pickle.loads(self.conn.recv(4096))
 
             if response[0] == self.my_color:
                 # receiving game after opponent has moved
@@ -225,8 +236,8 @@ class GoGuiOnline(GoGui):
                     _,
                     self.board,
                     self.pointer,
-                    self.white_group,
-                    self.black_group,
+                    self.white_groups,
+                    self.black_groups,
                     self.white_captured,
                     self.black_captured,
                 ) = response
@@ -239,8 +250,16 @@ class GoGuiOnline(GoGui):
                     break
                 # getting position of mouse
                 if event.type == pygame.MOUSEBUTTONDOWN and self.my_turn:
+                    self.show_ter = False
                     mouse_pos = pygame.mouse.get_pos()
                     self.fill_stone(mouse_pos)
+                if event.type == pygame.KEYDOWN:
+                    keys = pygame.key.get_pressed()
+                    if keys[pygame.K_p]:
+                        self.pass_turn()
+                    if keys[pygame.K_SPACE]:
+                        self.show_ter = True
+                        self.score()
 
             self.update_gui()
 

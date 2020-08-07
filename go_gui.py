@@ -34,10 +34,11 @@ class GoGui:
     top_pad = height - board_width - bot_pad * 2
     hor_pad = bot_pad
 
-    but0_x = 15
+    but_x = 15
     but0_y = 15
-    but_width = 70
+    but_width = 85
     but_height = 35
+    but1_y = but0_y + but_height + 5
 
     def __init__(self, size):
         self.size = size
@@ -60,6 +61,7 @@ class GoGui:
         self.white_stone_img = None
         self.clock = None
         self.time_elapsed = 0
+        pygame.mixer.music.load(os.path.join(os.getcwd(), "assets", "sound", "tap.mp3"))
 
         # True for black, False for white
         self.color = True
@@ -67,7 +69,7 @@ class GoGui:
         self.black_captured = 0
         self.white_score = 0
         self.black_score = 0
-        self.ended = False
+        self.show_ter = False
         self.empty_groups = {}
         self.territory = None
 
@@ -286,7 +288,6 @@ class GoGui:
             col = round((pos[0] - self.hor_pad) / self.spacing)
             if self.board[row, col] == 0:
                 # if board position is unfilled
-
                 # save state of game
                 self.states.append(
                     (
@@ -325,15 +326,23 @@ class GoGui:
                         self.black_captured,
                     ) = self.states.pop()
                 else:
+                    pygame.mixer.music.play()
                     # did not violate Ko, move on
                     self.color = not self.color
-        if (
-            pos[0] > self.but0_x
-            and pos[0] < self.but0_x + self.but_width
+        elif (
+            pos[0] > self.but_x
+            and pos[0] < self.but_x + self.but_width
             and pos[1] > self.but0_y
             and pos[1] < self.but0_y + self.but_height
         ):
             self.pass_turn()
+        elif (
+            pos[0] > self.but_x
+            and pos[0] < self.but_x + self.but_width
+            and pos[1] > self.but1_y
+            and pos[1] < self.but1_y + self.but_height
+        ):
+            self.clear_board()
 
     def pass_turn(self):
         """Pass turn to opponent
@@ -350,6 +359,29 @@ class GoGui:
             )
         )
         self.color = not self.color
+
+    def clear_board(self):
+        """Clears the entire board
+        """
+        self.states.append(
+            (
+                self.board.copy(),
+                self.pointer.copy(),
+                self.white_groups.copy(),
+                self.black_groups.copy(),
+                self.white_captured,
+                self.black_captured,
+            )
+        )
+        self.board = np.zeros((self.size, self.size), dtype=int)
+        # keeps track of the parent of each group
+        self.pointer = np.empty((self.size, self.size), dtype=int)
+        self.pointer.fill(-1)
+        self.white_groups = {}
+        self.black_groups = {}
+        self.white_captured = 0
+        self.black_captured = 0
+        self.color = True
 
     def update_stones(self):
         """Update the stones on GUI
@@ -552,21 +584,24 @@ class GoGui:
         text = font.render(color, True, BLACK)
         self.display.blit(text, (self.width // 2 - text.get_width() // 2, 15))
 
-    def draw_pass(self):
-        """Drawing the pass button
+    def draw_buttons(self):
+        """Drawing the buttons
         """
         self.display.fill(
-            BLUE, pygame.Rect(self.but0_x, self.but0_y, self.but_width, self.but_height)
+            BLUE, pygame.Rect(self.but_x, self.but0_y, self.but_width, self.but_height)
+        )
+        self.display.fill(
+            BLUE, pygame.Rect(self.but_x, self.but1_y, self.but_width, self.but_height)
         )
 
         font = pygame.font.SysFont("timesnewroman", 22)
         text = font.render("PASS", True, BLACK)
         self.display.blit(
-            text,
-            (
-                15 + (self.but_width - text.get_width()) // 2,
-                15 + (self.but_height - text.get_height()) // 2,
-            ),
+            text, (20, self.but0_y + (self.but_height - text.get_height()) // 2,),
+        )
+        text = font.render("CLEAR", True, BLACK)
+        self.display.blit(
+            text, (20, self.but1_y + (self.but_height - text.get_height()) // 2,),
         )
 
     def draw_territory(self):
@@ -636,9 +671,9 @@ class GoGui:
         self.draw_captured(font)
 
         # drawing pass button
-        self.draw_pass()
+        self.draw_buttons()
 
-        if self.ended:
+        if self.show_ter:
             self.draw_territory()
 
         mouse_x = pygame.mouse.get_pos()[0] - self.stone_width
@@ -777,10 +812,10 @@ class GoGui:
         self.running = True
         self.display = pygame.display.set_mode((self.width, self.height))
         self.black_stone_img = pygame.image.load(
-            os.path.join(os.getcwd(), "img", "black_stone.png")
+            os.path.join(os.getcwd(), "assets", "img", "black_stone.png")
         ).convert_alpha()
         self.white_stone_img = pygame.image.load(
-            os.path.join(os.getcwd(), "img", "white_stone.png")
+            os.path.join(os.getcwd(), "assets", "img", "white_stone.png")
         ).convert_alpha()
         self.clock = pygame.time.Clock()
         pygame.mouse.set_visible(False)
@@ -799,7 +834,7 @@ class GoGui:
                     return
                 # getting position of mouse
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    self.ended = False
+                    self.show_ter = False
                     mouse_pos = pygame.mouse.get_pos()
                     self.fill_stone(mouse_pos)
                 if event.type == pygame.KEYDOWN:
@@ -807,7 +842,7 @@ class GoGui:
                     if keys[pygame.K_p]:
                         self.pass_turn()
                     if keys[pygame.K_LCTRL] and keys[pygame.K_z]:
-                        self.ended = False
+                        self.show_ter = False
                         try:
                             (
                                 self.board,
@@ -820,8 +855,10 @@ class GoGui:
                             self.color = not self.color
                         except IndexError:
                             pass
+                    if keys[pygame.K_LSHIFT] and keys[pygame.K_c]:
+                        self.clear_board()
                     if keys[pygame.K_SPACE]:
-                        self.ended = True
+                        self.show_ter = True
                         self.score()
 
             self.clock.tick(60)
@@ -830,6 +867,7 @@ class GoGui:
 
 
 if __name__ == "__main__":
+    pygame.mixer.init(22050, -16, 2, 64)
     pygame.init()
     go_gui = GoGui(19)
     go_gui.start_game()

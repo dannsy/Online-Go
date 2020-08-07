@@ -13,6 +13,7 @@ PORT = 5000
 def main():
     """Creates a client and connects to server, then launches the Go game
     """
+    pygame.mixer.init(22050, -16, 2, 64)
     pygame.init()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
         addr = (HOST, PORT)
